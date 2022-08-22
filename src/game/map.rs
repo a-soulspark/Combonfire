@@ -2,12 +2,15 @@ use bevy::prelude::*;
 use iyes_loopless::prelude::AppLooplessStateExt;
 use rand::Rng;
 use crate::game::{FruitTilesTextures, GameStates};
+use bevy_prototype_lyon::prelude::*;
 
 pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app.add_enter_system(GameStates::Game, spawn_tiles);
+        app
+            .add_plugin(ShapePlugin)
+            .add_enter_system(GameStates::Game, spawn_tiles);
     }
 }
 
@@ -16,6 +19,7 @@ pub const TILE_LIMIT: usize = 30;
 // The size of a tile in pixels
 pub const TILE_SIZE: Vec2 = Vec2::splat(32.);
 pub const TILE_SCALE: f32 = 1.;
+const TILES_Z: f32 = -1.;
 
 #[derive(Component)]
 struct Tile;
@@ -57,13 +61,43 @@ fn spawn_tiles(
 
             // Choose random tile
             let texture = tile_textures_vec[rand::thread_rng().gen_range(0..tile_textures_vec_len)].clone();
-            commands.spawn_bundle(
+            commands
+                .spawn_bundle(
+                    GeometryBuilder::build_as(
+                        &shapes::RegularPolygon {
+                            sides: 4,
+                            feature: shapes::RegularPolygonFeature::SideLength(TILE_SIZE.x),
+                            ..shapes::RegularPolygon::default()
+                        },
+                        DrawMode::Outlined {
+                            fill_mode: FillMode::color(Color::Rgba {
+                                red: 0.0,
+                                green: 0.0,
+                                blue: 0.0,
+                                alpha: 0.8
+                            }),
+                            outline_mode: StrokeMode::new(Color::BLACK, 0.),
+                        },
+                        Transform {
+                            translation: Vec3{
+                                x: spawn.x,
+                                y: spawn.y,
+                                z: TILES_Z - 1.,
+                            },
+                            ..Default::default()
+                        }
+                    )
+                )
+                .insert(TileCover);
+
+            commands
+                .spawn_bundle(
                 SpriteBundle {
                     transform: Transform {
                         translation: Vec3{
                             x: spawn.x,
                             y: spawn.y,
-                            z: -1.,
+                            z: -20.,
                         },
                         scale: Vec3::splat(TILE_SCALE),
                         ..Default::default()
