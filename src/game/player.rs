@@ -24,6 +24,9 @@ impl Plugin for PlayerPlugin {
     }
 }
 
+#[derive(Component)]
+pub struct Player;
+
 fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>) {
     /* Create the ground. */
     commands
@@ -61,7 +64,8 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>) {
                 .insert(VirtualDPad::wasd(), InputAction::Move)
                 .build(),
             ..Default::default()
-        });
+        })
+        .insert(Player);
 }
 
 fn player_move_system(
@@ -83,6 +87,6 @@ fn player_move_system(
         // Determine the force based on the current velocity
         // The Force will be more intense the further away the current velocity is from the target velocity
         // PLAYER_TIGHTNESS makes the velocity change faster, but it does not affect the speed itself
-        force.force = ((target_velocity - velocity.linvel) * PLAYER_TIGHTNESS);
+        force.force = (target_velocity - velocity.linvel) * PLAYER_TIGHTNESS;
     }
 }

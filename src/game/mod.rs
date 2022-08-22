@@ -9,11 +9,25 @@ use leafwing_input_manager::prelude::*;
 use leafwing_input_manager::Actionlike;
 
 mod player;
+mod map;
+mod camera;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 enum GameStates {
     AssetLoading,
     Game,
+}
+
+#[derive(AssetCollection)]
+struct FruitTilesTextures {
+    # [asset(path = "textures/ground_tiles/1.png")]
+    pub grass1: Handle < Image >,
+    # [asset(path = "textures/ground_tiles/2.png")]
+    pub grass2: Handle < Image >,
+    # [asset(path = "textures/ground_tiles/3.png")]
+    pub grass3: Handle < Image >,
+    # [asset(path = "textures/ground_tiles/4.png")]
+    pub grass4: Handle < Image >,
 }
 
 #[derive(AssetCollection)]
@@ -28,6 +42,7 @@ enum InputAction {
     MoveY,
 }
 
+//region MainPlugin
 pub struct MainPlugin;
 
 impl Plugin for MainPlugin {
@@ -36,7 +51,8 @@ impl Plugin for MainPlugin {
             .add_loading_state(
                 LoadingState::new(GameStates::AssetLoading)
                     .continue_to_state(GameStates::Game)
-                    .with_collection::<TextureAssets>(),
+                    .with_collection::<TextureAssets>()
+                    .with_collection::<FruitTilesTextures>(),
             )
             .add_plugin(WorldInspectorPlugin::new())
             .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
@@ -47,11 +63,8 @@ impl Plugin for MainPlugin {
                 ..Default::default()
             })
             .add_plugin(player::PlayerPlugin)
-            .add_startup_system(setup_camera_system);
+            .add_plugin(map::MapPlugin)
+            .add_plugin(camera::CameraPlugin);
     }
 }
 //endregion
-
-fn setup_camera_system(mut commands: Commands) {
-    commands.spawn_bundle(Camera2dBundle::default());
-}
