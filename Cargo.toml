@@ -13,8 +13,6 @@ leafwing-input-manager = "0.5.1"
 bevy_asset_loader = { version = "0.12.1", features = ["stageless"] } 
 iyes_loopless = "0.7.1"
 rand = "0.8.5"
-# For drawing shapes
-bevy_prototype_lyon = "0.6.0"
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!

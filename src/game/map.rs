@@ -2,15 +2,15 @@ use bevy::prelude::*;
 use iyes_loopless::prelude::AppLooplessStateExt;
 use rand::Rng;
 use crate::game::{FruitTilesTextures, GameStates};
-use bevy_prototype_lyon::prelude::*;
 
 pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugin(ShapePlugin)
-            .add_enter_system(GameStates::Game, spawn_tiles);
+            .add_enter_system(GameStates::Game, spawn_tiles)
+            .insert_resource(Up(true))
+            .add_system(change_colors);
     }
 }
 
@@ -63,30 +63,27 @@ fn spawn_tiles(
             let texture = tile_textures_vec[rand::thread_rng().gen_range(0..tile_textures_vec_len)].clone();
             commands
                 .spawn_bundle(
-                    GeometryBuilder::build_as(
-                        &shapes::RegularPolygon {
-                            sides: 4,
-                            feature: shapes::RegularPolygonFeature::SideLength(TILE_SIZE.x),
-                            ..shapes::RegularPolygon::default()
-                        },
-                        DrawMode::Outlined {
-                            fill_mode: FillMode::color(Color::Rgba {
+                    SpriteBundle {
+                        sprite: Sprite {
+                            color: Color::Rgba {
                                 red: 0.0,
                                 green: 0.0,
                                 blue: 0.0,
-                                alpha: 0.8
-                            }),
-                            outline_mode: StrokeMode::new(Color::BLACK, 0.),
+                                alpha: 1.,
+                            },
+                            custom_size: Option::from(TILE_SIZE * TILE_SCALE),
+                            ..Default::default()
                         },
-                        Transform {
-                            translation: Vec3{
+                        transform: Transform {
+                            translation: Vec3 {
                                 x: spawn.x,
                                 y: spawn.y,
-                                z: TILES_Z - 1.,
+                                z: TILES_Z
                             },
                             ..Default::default()
-                        }
-                    )
+                        },
+                        ..Default::default()
+                    }
                 )
                 .insert(TileCover);
 
@@ -114,5 +111,26 @@ fn spawn_tiles(
         // Adjust spawn
         spawn.x = (TILE_LIMIT as f32) * TILE_SIZE.x * TILE_SCALE;
         spawn.y -= TILE_SIZE.y * TILE_SCALE;
+    }
+}
+
+struct Up(bool);
+fn change_colors(mut query: Query<&mut Sprite, With<TileCover>>, mut up: ResMut<Up>) {
+    for mut sprite in query.iter_mut() {
+        // your color changing logic here instead:
+        let a = sprite.color.a();
+        if a >= 0.95 {
+            up.0 = false;
+        }
+        if a <= 0.5 {
+            up.0 = true;
+        }
+
+        if up.0 {
+            sprite.color.set_a(a + 0.01);
+        } else {
+            sprite.color.set_a(a - 0.01);
+        }
+
     }
 }
