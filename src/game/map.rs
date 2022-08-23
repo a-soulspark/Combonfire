@@ -15,15 +15,16 @@ impl Plugin for MapPlugin {
 }
 
 // The square root of the number of tiles the map has (i.e. the map area)
-pub const TILE_LIMIT: usize = 30;
+pub const TILE_LIMIT: i32 = 30;
 // The size of a tile in pixels
 pub const TILE_SIZE: Vec2 = Vec2::splat(32.);
 pub const TILE_SCALE: f32 = 1.;
-const TILES_Z: f32 = -1.;
 
 #[derive(Component, Inspectable)]
 pub struct LightSource {
-    pub range: f32,
+    pub max_range: f32,
+    pub inner_range: f32,
+    pub color: Color,
 }
 
 #[derive(Component)]
@@ -37,11 +38,11 @@ fn spawn_tiles(mut commands: Commands, tile_textures: Res<FruitTilesTextures>) {
         .spawn_bundle(TransformBundle::from_transform(Transform::from_xyz(
             400., 400., 0.,
         )))
-        .insert(LightSource { range: 250. });
-
-    // Where the tile will spawn
-    // the first tile spawns in the top right corner
-    let mut spawn: Vec2 = (TILE_LIMIT as f32) * TILE_SIZE * TILE_SCALE;
+        .insert(LightSource {
+            max_range: 250.,
+            inner_range: 200.,
+            color: Color::rgb(0.80, 0.70, 0.60) * 0.7,
+        });
 
     let tile_textures_vec = [
         &tile_textures.grass1,
@@ -58,59 +59,31 @@ fn spawn_tiles(mut commands: Commands, tile_textures: Res<FruitTilesTextures>) {
     let tile_textures_vec_len = tile_textures_vec.len();
 
     // The vertical loop
-    for _ in 0..TILE_LIMIT * 2 {
+    for y in -TILE_LIMIT..=TILE_LIMIT {
         // The horizontal loop
-        for _ in 0..TILE_LIMIT * 2 {
+        for x in -TILE_LIMIT..=TILE_LIMIT {
             // Spawn tile
 
             // Choose random tile
             let texture =
                 tile_textures_vec[rand::thread_rng().gen_range(0..tile_textures_vec_len)].clone();
+
             commands
                 .spawn_bundle(SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::Rgba {
-                            red: 0.0,
-                            green: 0.0,
-                            blue: 0.0,
-                            alpha: 1.,
-                        },
-                        custom_size: Option::from(TILE_SIZE * TILE_SCALE),
-                        ..Default::default()
-                    },
                     transform: Transform {
                         translation: Vec3 {
-                            x: spawn.x,
-                            y: spawn.y,
-                            z: TILES_Z,
+                            x: TILE_SIZE.x * TILE_SCALE * x as f32,
+                            y: TILE_SIZE.y * TILE_SCALE * y as f32,
+                            z: -1.,
                         },
+                        scale: Vec3::splat(TILE_SCALE),
                         ..Default::default()
                     },
+                    texture,
                     ..Default::default()
                 })
                 .insert(TileCover);
-
-            commands.spawn_bundle(SpriteBundle {
-                transform: Transform {
-                    translation: Vec3 {
-                        x: spawn.x,
-                        y: spawn.y,
-                        z: -20.,
-                    },
-                    scale: Vec3::splat(TILE_SCALE),
-                    ..Default::default()
-                },
-                texture,
-                ..Default::default()
-            });
-
-            // Change spawn
-            spawn.x -= TILE_SIZE.x * TILE_SCALE;
         }
-
-        // Adjust spawn
-        spawn.x = (TILE_LIMIT as f32) * TILE_SIZE.x * TILE_SCALE;
-        spawn.y -= TILE_SIZE.y * TILE_SCALE;
     }
 }
 
@@ -119,12 +92,18 @@ fn update_lighting(
     light_source_query: Query<(&LightSource, &Transform)>,
 ) {
     for (mut sprite, tf) in query.iter_mut() {
-        let mut top_brightness: f32 = 1.;
+        let mut color = Color::rgb(0.15, 0.15, 0.3);
+
         for (light_source, light_tf) in light_source_query.iter() {
-            top_brightness = top_brightness
-                .min(light_tf.translation.distance(tf.translation) / light_source.range);
+            color += light_source.color
+                * (1.
+                    - (light_tf.translation.distance(tf.translation) - light_source.inner_range)
+                        / (light_source.max_range - light_source.inner_range))
+                    .clamp(0., 1.);
         }
 
-        sprite.color = *Color::BLACK.clone().set_a(top_brightness);
+        // Convert color into Vec4 for easier modification
+        let color: Vec4 = color.into();
+        sprite.color = color.min(Vec4::ONE).into();
     }
 }

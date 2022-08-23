@@ -66,7 +66,11 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>) {
             ..Default::default()
         })
         .insert(Player)
-        .insert(LightSource { range: 200. });
+        .insert(LightSource {
+            max_range: 150.,
+            inner_range: 50.,
+            color: Color::rgb(0.80, 0.70, 0.50),
+        });
 }
 
 fn player_move_system(
