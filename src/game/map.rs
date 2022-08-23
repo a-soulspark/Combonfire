@@ -115,22 +115,15 @@ fn spawn_tiles(
 }
 
 struct Up(bool);
-fn change_colors(mut query: Query<&mut Sprite, With<TileCover>>, mut up: ResMut<Up>) {
+fn change_colors(mut query: Query<&mut Sprite, With<TileCover>>, time: Res<Time>) {
     for mut sprite in query.iter_mut() {
-        // your color changing logic here instead:
-        let a = sprite.color.a();
-        if a >= 0.95 {
-            up.0 = false;
-        }
-        if a <= 0.5 {
-            up.0 = true;
-        }
+        let seconds = time.seconds_since_startup() as f32;
 
-        if up.0 {
-            sprite.color.set_a(a + 0.01);
-        } else {
-            sprite.color.set_a(a - 0.01);
-        }
-
+        sprite.color = Color::Rgba {
+            red: (1.25 * seconds).sin() / 2.0 + 0.5,
+            green: (0.75 * seconds).sin() / 2.0 + 0.5,
+            blue: (0.50 * seconds).sin() / 2.0 + 0.5,
+            alpha: 0.25,
+        };
     }
 }
