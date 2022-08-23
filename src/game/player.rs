@@ -13,7 +13,7 @@ const PLAYER_SPEED: f32 = 300.;
 /// Values excessively high
 const PLAYER_TIGHTNESS: f32 = 5.;
 
-use super::{GameStates, InputAction, TextureAssets};
+use super::{map::LightSource, GameStates, InputAction, TextureAssets};
 
 pub struct PlayerPlugin;
 
@@ -65,7 +65,8 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>) {
                 .build(),
             ..Default::default()
         })
-        .insert(Player);
+        .insert(Player)
+        .insert(LightSource { range: 200. });
 }
 
 fn player_move_system(
