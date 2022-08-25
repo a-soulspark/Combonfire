@@ -13,7 +13,7 @@ impl Plugin for CameraPlugin {
 }
 
 #[derive(Component)]
-struct MainCamera;
+pub struct MainCamera;
 
 fn setup_camera_system(mut commands: Commands) {
     commands.spawn_bundle(Camera2dBundle {

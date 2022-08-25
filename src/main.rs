@@ -6,4 +6,4 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(game::MainPlugin)
         .run();
-}
+    }

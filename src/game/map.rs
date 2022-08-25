@@ -4,13 +4,16 @@ use bevy_inspector_egui::{Inspectable, RegisterInspectable};
 use iyes_loopless::prelude::AppLooplessStateExt;
 use rand::Rng;
 
+use super::camera::MainCamera;
+
 pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameStates::Game, spawn_tiles)
             .register_inspectable::<LightSource>()
-            .add_system(update_lighting);
+            .add_system(update_lighting)
+            .add_system(move_tiles_outside_view);
     }
 }
 
@@ -105,5 +108,48 @@ fn update_lighting(
         // Convert color into Vec4 for easier modification
         let color: Vec4 = color.into();
         sprite.color = color.min(Vec4::ONE).into();
+    }
+}
+
+fn move_tiles_outside_view(
+    player_query: Query<&Transform, With<MainCamera>>,
+    mut tiles_query: Query<&mut Transform, (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
+    //mut commands: Commands,
+    window: Res<Windows>,
+) {
+    let window = window.get_primary().unwrap();
+    
+    let window_right = window.width() / 2.;
+    let window_up = window.height() / 2.;
+
+    for camera_tf in player_query.iter() {
+        let camera_tl = camera_tf.translation;
+
+        for mut tile_tf in tiles_query.iter_mut() {
+            let tile_tl = tile_tf.translation;
+
+            let is_not_viewable =
+            tile_tl.x >= camera_tl.x + window_right + TILE_SIZE.x || // Right
+            tile_tl.x <= camera_tl.x - window_right - TILE_SIZE.x || // Left
+            tile_tl.y >= camera_tl.y + window_up + TILE_SIZE.y || // Up
+            tile_tl.y <= camera_tl.y - window_up - TILE_SIZE.y; // Down
+
+            if is_not_viewable {
+                // Move the tile to the
+                // Opposite position in
+                // Relation to the player
+                
+                //                  New Tile Position
+                //                     |                    
+                //Tile outside view   \/
+                //   |               |_|
+                //  \/     Player     |
+                // |_| ---------------
+                //
+                
+                tile_tf.translation.x += (camera_tl.x - tile_tl.x) * 2.;
+                tile_tf.translation.y += (camera_tl.y - tile_tl.y) * 2.;
+            }
+        }
     }
 }
