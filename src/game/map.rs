@@ -4,7 +4,7 @@ use bevy_inspector_egui::{Inspectable, RegisterInspectable};
 use iyes_loopless::prelude::AppLooplessStateExt;
 use rand::Rng;
 
-use super::camera::MainCamera;
+use super::{camera::MainCamera, vec3_to_vec2};
 
 pub struct MapPlugin;
 
@@ -12,8 +12,8 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameStates::Game, spawn_tiles)
             .register_inspectable::<LightSource>()
-            .add_system(update_lighting)
-            .add_system(move_tiles_outside_view);
+            .add_system(update_lighting);
+            //.add_system(move_tiles_outside_view);
     }
 }
 
@@ -36,16 +36,13 @@ struct Tile;
 #[derive(Component)]
 struct TileCover;
 
-fn spawn_tiles(mut commands: Commands, tile_textures: Res<FruitTilesTextures>) {
-    commands
-        .spawn_bundle(TransformBundle::from_transform(Transform::from_xyz(
-            400., 400., 0.,
-        )))
-        .insert(LightSource {
-            max_range: 250.,
-            inner_range: 200.,
-            color: Color::rgb(0.80, 0.70, 0.60) * 0.7,
-        });
+fn spawn_tile (
+    commands: &mut Commands,
+    tile_textures: &Res<FruitTilesTextures>,
+    mut translation: Vec3,
+) {
+
+    translation.z = -1.;
 
     let tile_textures_vec = [
         &tile_textures.grass1,
@@ -61,24 +58,15 @@ fn spawn_tiles(mut commands: Commands, tile_textures: Res<FruitTilesTextures>) {
     ];
     let tile_textures_vec_len = tile_textures_vec.len();
 
-    // The vertical loop
-    for y in -TILE_LIMIT..=TILE_LIMIT {
-        // The horizontal loop
-        for x in -TILE_LIMIT..=TILE_LIMIT {
-            // Spawn tile
+    // Choose random tile
+    let texture =
+    tile_textures_vec[rand::thread_rng().gen_range(0..tile_textures_vec_len)].clone();
 
-            // Choose random tile
-            let texture =
-                tile_textures_vec[rand::thread_rng().gen_range(0..tile_textures_vec_len)].clone();
 
-            commands
+    commands
                 .spawn_bundle(SpriteBundle {
                     transform: Transform {
-                        translation: Vec3 {
-                            x: TILE_SIZE.x * TILE_SCALE * x as f32,
-                            y: TILE_SIZE.y * TILE_SCALE * y as f32,
-                            z: -1.,
-                        },
+                        translation,
                         scale: Vec3::splat(TILE_SCALE),
                         ..Default::default()
                     },
@@ -86,6 +74,30 @@ fn spawn_tiles(mut commands: Commands, tile_textures: Res<FruitTilesTextures>) {
                     ..Default::default()
                 })
                 .insert(TileCover);
+}
+
+fn spawn_tiles(mut commands: Commands, tile_textures: Res<FruitTilesTextures>) {
+    commands
+        .spawn_bundle(TransformBundle::from_transform(Transform::from_xyz(
+            400., 400., 0.,
+        )))
+        .insert(LightSource {
+            max_range: 250.,
+            inner_range: 200.,
+            color: Color::rgb(0.80, 0.70, 0.60) * 0.7,
+        });
+
+    // The vertical loop
+    for y in -TILE_LIMIT..=TILE_LIMIT {
+        // The horizontal loop
+        for x in -TILE_LIMIT..=TILE_LIMIT {
+            // Spawn tile
+
+            spawn_tile(&mut commands, &tile_textures,  Vec3 {
+                x: TILE_SIZE.x * TILE_SCALE * x as f32,
+                y: TILE_SIZE.y * TILE_SCALE * y as f32,
+                z: 0., // The z is overwritten
+            })
         }
     }
 }
@@ -113,9 +125,10 @@ fn update_lighting(
 
 fn move_tiles_outside_view(
     player_query: Query<&Transform, With<MainCamera>>,
-    mut tiles_query: Query<(Entity, &mut Transform), (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
+    tiles_query: Query<(Entity, &Transform), (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
     window: Res<Windows>,
-    mut commands: Commands
+    mut commands: Commands,
+    tile_textures: Res<FruitTilesTextures>,
 ) {
     let window = window.get_primary().unwrap();
     
@@ -125,50 +138,82 @@ fn move_tiles_outside_view(
     for camera_tf in player_query.iter() {
         let camera_tl = camera_tf.translation;
 
-        for (tile_entity, mut tile_tf) in tiles_query.iter_mut() {
+    
+        // The camera corners are to be used as a reference.
+        let camera_corners = [
+        Vec2 {x: camera_tl.x + window_right, y: camera_tl.y + window_up}, // Top-Right
+        Vec2 {x: camera_tl.x - window_right, y: camera_tl.y - window_up}, // Bottom-Left
+        ];
+
+        // This variable is used in order to see where the top-rightmost and the
+        // Bottom-leftmost points of the tiles are at present, 
+        // And if they are inside the camera's field of view
+        // i.e. the tiles don't cover the whole window,
+        // They will be spawned accordingly.
+        let mut tile_corners =[
+            vec3_to_vec2(camera_tl), // Top-Right
+            vec3_to_vec2(camera_tl), // Bottom-Left
+        ];
+        for (tile_entity, tile_tf) in tiles_query.iter() {
             let tile_tl = tile_tf.translation;
 
-            let is_not_bordering =
-            tile_tl.x >= camera_tl.x + window_right + TILE_SIZE.x * 3. || // Right
-            tile_tl.x <= camera_tl.x - window_right - TILE_SIZE.x  * 3. || // Left
-            tile_tl.y >= camera_tl.y + window_up + TILE_SIZE.y  * 3. || // Up
-            tile_tl.y <= camera_tl.y - window_up - TILE_SIZE.y * 3. ; // Down
-
-            if is_not_bordering {
-                commands.entity(tile_entity).despawn();
-            }
-
             let is_not_viewable =
-            tile_tl.x >= camera_tl.x + window_right + TILE_SIZE.x || // Right
-            tile_tl.x <= camera_tl.x - window_right - TILE_SIZE.x || // Left
-            tile_tl.y >= camera_tl.y + window_up + TILE_SIZE.y || // Up
-            tile_tl.y <= camera_tl.y - window_up - TILE_SIZE.y; // Down
+            tile_tl.x >= camera_corners[0].x + TILE_SIZE.x || // Right
+            tile_tl.x <= camera_corners[1].x - TILE_SIZE.x || // Left
+            tile_tl.y >= camera_corners[0].y + TILE_SIZE.y || // Up
+            tile_tl.y <= camera_corners[1].y - TILE_SIZE.y; // Down
 
             if is_not_viewable {
-                // Move the tile to the
-                // Opposite position in
-                // Relation to the player
-                
-                //                  New Tile Position
-                //                     |                    
-                //Tile outside view   \/
-                //   |               |_|
-                //  \/     Player     |
-                // |_| ---------------
-                //
-                
-                tile_tf.translation.x += (camera_tl.x - tile_tl.x) * 2.;
-                tile_tf.translation.y += (camera_tl.y - tile_tl.y) * 2.;
+                commands.entity(tile_entity).despawn();
+                continue;
+            }
 
-                // The following code
-                // Adjusts the moving tile to an invisible grid 
-                // In order to make sure there are
-                // No spaces inbetween tiles
-                tile_tf.translation.x -= tile_tf.translation.x % TILE_SIZE.x;
-                tile_tf.translation.y -= tile_tf.translation.y % TILE_SIZE.y;
-                
-
+            if tile_tl.x > tile_corners[0].x && tile_tl.y > tile_corners[0].y {
+                tile_corners[0] = vec3_to_vec2(tile_tl);
+            }
+            if tile_tl.x < tile_corners[1].x && tile_tl.y < tile_corners[1].y {
+                tile_corners[1] = vec3_to_vec2(tile_tl);
             }
         }
+
+        if camera_corners[0] == tile_corners[0] && camera_corners[1] == tile_corners[1]  {
+            continue; // Since there is only one camera, this is equal to return;
+            // I use continue because I can, not because I need to.
+            //...
+            // HMMMMMM I'mma "𝘤𝘰𝘯𝘵𝘪𝘯𝘶𝘦;" my e̶x̶t̶r̶e̶m̶e̶l̶y̶ d̶e̶t̶r̶i̶m̶e̶n̶t̶a̶l̶ a̶n̶d̶ u̶n̶d̶e̶n̶i̶a̶b̶l̶y̶ t̶e̶r̶r̶i̶b̶l̶e̶  𝓽𝓮𝓻𝓻𝓲𝓯𝓲𝓬 𝔀𝓸𝓻𝓴
+        }
+
+        // If the player has moved in the top/right direction
+        if camera_corners[0] != tile_corners[0] {
+            let number_of_tiles = ((camera_corners[0] - tile_corners[0]) / TILE_SIZE).ceil();
+
+            // Fill the whole vertical part
+            //
+            // -----------------------
+            // ######################|
+            // ######################|
+            // --------------        |
+            //    TILES     |        |
+            //              |        |
+            let number_of_horizontal_tiles = (window.width() / TILE_SIZE.x).ceil() as i32;
+            // The vertical loop
+            let mut vertical_spawn = tile_corners[0].y;
+            for _ in 0..(camera_corners[0].y.ceil() as i32) {
+                let mut horizontal_spawn = tile_corners[0].x;
+                // The horizontal loop
+                for _ in 0..number_of_horizontal_tiles {
+                    spawn_tile(&mut commands, &tile_textures, Vec3 { x: horizontal_spawn, y: vertical_spawn, z: 0. });
+
+                    horizontal_spawn += TILE_SIZE.x;
+                }
+                vertical_spawn += TILE_SIZE.y;
+            }
+
+
+
+        }
+
     }
+
+    
 }

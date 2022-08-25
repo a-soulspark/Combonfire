@@ -1,7 +1,5 @@
 use bevy::prelude::*;
 use crate::game::player::Player;
-use crate::game::map::{TILE_LIMIT, TILE_SCALE, TILE_SIZE};
-
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {

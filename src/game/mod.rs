@@ -47,7 +47,8 @@ pub struct MainPlugin;
 
 impl Plugin for MainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_loopless_state(GameStates::AssetLoading)
+        app
+            .add_loopless_state(GameStates::AssetLoading)
             .add_loading_state(
                 LoadingState::new(GameStates::AssetLoading)
                     .continue_to_state(GameStates::Game)
@@ -68,3 +69,10 @@ impl Plugin for MainPlugin {
     }
 }
 //endregion
+
+// Usables
+pub fn vec3_to_vec2(
+    to_covert: Vec3,
+) -> Vec2 {
+    Vec2 { x: to_covert.x, y: to_covert.y }
+}
