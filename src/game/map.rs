@@ -113,9 +113,9 @@ fn update_lighting(
 
 fn move_tiles_outside_view(
     player_query: Query<&Transform, With<MainCamera>>,
-    mut tiles_query: Query<&mut Transform, (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
-    //mut commands: Commands,
+    mut tiles_query: Query<(Entity, &mut Transform), (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
     window: Res<Windows>,
+    mut commands: Commands
 ) {
     let window = window.get_primary().unwrap();
     
@@ -125,8 +125,18 @@ fn move_tiles_outside_view(
     for camera_tf in player_query.iter() {
         let camera_tl = camera_tf.translation;
 
-        for mut tile_tf in tiles_query.iter_mut() {
+        for (tile_entity, mut tile_tf) in tiles_query.iter_mut() {
             let tile_tl = tile_tf.translation;
+
+            let is_not_bordering =
+            tile_tl.x >= camera_tl.x + window_right + TILE_SIZE.x * 3. || // Right
+            tile_tl.x <= camera_tl.x - window_right - TILE_SIZE.x  * 3. || // Left
+            tile_tl.y >= camera_tl.y + window_up + TILE_SIZE.y  * 3. || // Up
+            tile_tl.y <= camera_tl.y - window_up - TILE_SIZE.y * 3. ; // Down
+
+            if is_not_bordering {
+                commands.entity(tile_entity).despawn();
+            }
 
             let is_not_viewable =
             tile_tl.x >= camera_tl.x + window_right + TILE_SIZE.x || // Right
@@ -149,6 +159,15 @@ fn move_tiles_outside_view(
                 
                 tile_tf.translation.x += (camera_tl.x - tile_tl.x) * 2.;
                 tile_tf.translation.y += (camera_tl.y - tile_tl.y) * 2.;
+
+                // The following code
+                // Adjusts the moving tile to an invisible grid 
+                // In order to make sure there are
+                // No spaces inbetween tiles
+                tile_tf.translation.x -= tile_tf.translation.x % TILE_SIZE.x;
+                tile_tf.translation.y -= tile_tf.translation.y % TILE_SIZE.y;
+                
+
             }
         }
     }
