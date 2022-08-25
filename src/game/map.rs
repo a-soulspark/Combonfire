@@ -1,7 +1,7 @@
 use crate::game::{FruitTilesTextures, GameStates};
 use bevy::prelude::*;
 use bevy_inspector_egui::{Inspectable, RegisterInspectable};
-use iyes_loopless::prelude::AppLooplessStateExt;
+use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 use rand::Rng;
 
 use super::{camera::MainCamera, vec3_to_vec2};
@@ -12,8 +12,12 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameStates::Game, spawn_tiles)
             .register_inspectable::<LightSource>()
+            .add_system_set(
+                ConditionSet::new()
+                  .run_in_state(GameStates::Game)
+                  .with_system(move_tiles_outside_view).into()
+              )
             .add_system(update_lighting);
-            //.add_system(move_tiles_outside_view);
     }
 }
 
@@ -158,10 +162,10 @@ fn move_tiles_outside_view(
             let tile_tl = tile_tf.translation;
 
             let is_not_viewable =
-            tile_tl.x >= camera_corners[0].x + TILE_SIZE.x || // Right
-            tile_tl.x <= camera_corners[1].x - TILE_SIZE.x || // Left
-            tile_tl.y >= camera_corners[0].y + TILE_SIZE.y || // Up
-            tile_tl.y <= camera_corners[1].y - TILE_SIZE.y; // Down
+            tile_tl.x >= camera_corners[0].x   || // Right
+            tile_tl.x <= camera_corners[1].x   || // Left
+            tile_tl.y >= camera_corners[0].y  || // Up
+            tile_tl.y <= camera_corners[1].y ; // Down
 
             if is_not_viewable {
                 commands.entity(tile_entity).despawn();
@@ -176,7 +180,11 @@ fn move_tiles_outside_view(
             }
         }
 
-        if camera_corners[0] == tile_corners[0] && camera_corners[1] == tile_corners[1]  {
+
+
+        // If the player hasn't moved
+        if camera_corners[0].x <= tile_corners[0].x && camera_corners[0].y <= tile_corners[0].y && 
+        camera_corners[1].x <= tile_corners[1].x && camera_corners[1].y <= tile_corners[1].y{
             continue; // Since there is only one camera, this is equal to return;
             // I use continue because I can, not because I need to.
             //...
@@ -184,8 +192,11 @@ fn move_tiles_outside_view(
         }
 
         // If the player has moved in the top/right direction
-        if camera_corners[0] != tile_corners[0] {
-            let number_of_tiles = ((camera_corners[0] - tile_corners[0]) / TILE_SIZE).ceil();
+        if camera_corners[0].x > tile_corners[0].x || camera_corners[0].y > tile_corners[0].y {
+
+            dbg!(camera_corners, tile_corners);
+
+            let number_of_tiles_to_spawn = ((camera_corners[0] - tile_corners[0]) / TILE_SIZE).ceil() + TILE_SIZE;
 
             // Fill the whole vertical part
             //
@@ -197,16 +208,18 @@ fn move_tiles_outside_view(
             //              |        |
             let number_of_horizontal_tiles = (window.width() / TILE_SIZE.x).ceil() as i32;
             // The vertical loop
-            let mut vertical_spawn = tile_corners[0].y;
-            for _ in 0..(camera_corners[0].y.ceil() as i32) {
-                let mut horizontal_spawn = tile_corners[0].x;
+            // println!("{}, {}", number_of_tiles_to_spawn.y, number_of_horizontal_tiles);
+            for vertical_tile_index in 0..=(number_of_tiles_to_spawn.y as i32) {
                 // The horizontal loop
-                for _ in 0..number_of_horizontal_tiles {
-                    spawn_tile(&mut commands, &tile_textures, Vec3 { x: horizontal_spawn, y: vertical_spawn, z: 0. });
-
-                    horizontal_spawn += TILE_SIZE.x;
+                for horizontal_tile_index in 0..=number_of_horizontal_tiles {
+                    spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                        // Start point       +           index * size
+                        x: tile_corners[1].x + horizontal_tile_index as f32 * TILE_SIZE.x , 
+                        y: tile_corners[0].y + vertical_tile_index as f32 * TILE_SIZE.y, 
+                        z: 0. 
+                    });
+                    //println!("Spawn: {}, {}", horizontal_spawn, vertical_spawn);
                 }
-                vertical_spawn += TILE_SIZE.y;
             }
 
 
