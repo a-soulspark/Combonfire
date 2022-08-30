@@ -69,10 +69,3 @@ impl Plugin for MainPlugin {
     }
 }
 //endregion
-
-// Usables
-pub fn vec3_to_vec2(
-    to_covert: Vec3,
-) -> Vec2 {
-    Vec2 { x: to_covert.x, y: to_covert.y }
-}

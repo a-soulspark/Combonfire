@@ -4,7 +4,7 @@ use bevy_inspector_egui::{Inspectable, RegisterInspectable};
 use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 use rand::Rng;
 
-use super::{camera::MainCamera, vec3_to_vec2};
+use super::{camera::MainCamera};
 
 pub struct MapPlugin;
 
@@ -12,11 +12,11 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameStates::Game, spawn_tiles)
             .register_inspectable::<LightSource>()
-            .add_system_set(
-                ConditionSet::new()
-                  .run_in_state(GameStates::Game)
-                  .with_system(move_tiles_outside_view).into()
-              )
+            // .add_system_set(
+            //     ConditionSet::new()
+            //       .run_in_state(GameStates::Game)
+            //       .with_system(move_tiles_outside_view).into()
+            //   )
             .add_system(update_lighting);
     }
 }
@@ -155,8 +155,8 @@ fn move_tiles_outside_view(
         // i.e. the tiles don't cover the whole window,
         // They will be spawned accordingly.
         let mut tile_corners =[
-            vec3_to_vec2(camera_tl), // Top-Right
-            vec3_to_vec2(camera_tl), // Bottom-Left
+            camera_tl.truncate(), // Top-Right
+            camera_tl.truncate(), // Bottom-Left
         ];
         for (tile_entity, tile_tf) in tiles_query.iter() {
             let tile_tl = tile_tf.translation;
@@ -173,10 +173,10 @@ fn move_tiles_outside_view(
             }
 
             if tile_tl.x > tile_corners[0].x && tile_tl.y > tile_corners[0].y {
-                tile_corners[0] = vec3_to_vec2(tile_tl);
+                tile_corners[0] = tile_tl.truncate();
             }
             if tile_tl.x < tile_corners[1].x && tile_tl.y < tile_corners[1].y {
-                tile_corners[1] = vec3_to_vec2(tile_tl);
+                tile_corners[1] = tile_tl.truncate();
             }
         }
 
