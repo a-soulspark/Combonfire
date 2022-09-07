@@ -47,7 +47,8 @@ pub struct MainPlugin;
 
 impl Plugin for MainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_loopless_state(GameStates::AssetLoading)
+        app
+            .add_loopless_state(GameStates::AssetLoading)
             .add_loading_state(
                 LoadingState::new(GameStates::AssetLoading)
                     .continue_to_state(GameStates::Game)
