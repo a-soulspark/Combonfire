@@ -1,5 +1,7 @@
+use std::ops::Add;
+
 use crate::game::{FruitTilesTextures, GameStates};
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
 use bevy_inspector_egui::{Inspectable, RegisterInspectable};
 use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 use rand::Rng;
@@ -12,11 +14,12 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameStates::Game, spawn_tiles)
             .register_inspectable::<LightSource>()
-            // .add_system_set(
-            //     ConditionSet::new()
-            //       .run_in_state(GameStates::Game)
-            //       .with_system(move_tiles_outside_view).into()
-            //   )
+            .add_system_set(
+                ConditionSet::new()
+                  .run_in_state(GameStates::Game)
+                  .with_system(remove_tiles_outside_view)
+                  .with_system(spawn_tiles_inside_view).into()
+              )
             .add_system(update_lighting);
     }
 }
@@ -26,6 +29,8 @@ pub const TILE_LIMIT: i32 = 30;
 // The size of a tile in pixels
 pub const TILE_SIZE: Vec2 = Vec2::splat(32.);
 pub const TILE_SCALE: f32 = 1.;
+// How far a tile can be from the screen without being despawned
+const OUT_OF_BORDERS_TILE_TOLERANCE: f32 = 100.;
 
 #[derive(Component, Inspectable)]
 pub struct LightSource {
@@ -127,76 +132,79 @@ fn update_lighting(
     }
 }
 
-fn move_tiles_outside_view(
-    player_query: Query<&Transform, With<MainCamera>>,
+fn remove_tiles_outside_view(
+    camera_query: Query<&Transform, With<MainCamera>>,
     tiles_query: Query<(Entity, &Transform), (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
     window: Res<Windows>,
     mut commands: Commands,
-    tile_textures: Res<FruitTilesTextures>,
 ) {
     let window = window.get_primary().unwrap();
     
-    let window_right = window.width() / 2.;
-    let window_up = window.height() / 2.;
+    let window_right = window.width() / 2. + 50.; //+ TILE_SIZE.x / 2.;
+    let window_up = window.height() / 2. + 50.;//+ TILE_SIZE.y / 2.;
 
-    for camera_tf in player_query.iter() {
+    for camera_tf in camera_query.iter() {
         let camera_tl = camera_tf.translation;
 
-    
         // The camera corners are to be used as a reference.
         let camera_corners = [
         Vec2 {x: camera_tl.x + window_right, y: camera_tl.y + window_up}, // Top-Right
         Vec2 {x: camera_tl.x - window_right, y: camera_tl.y - window_up}, // Bottom-Left
         ];
 
-        // This variable is used in order to see where the top-rightmost and the
-        // Bottom-leftmost points of the tiles are at present, 
-        // And if they are inside the camera's field of view
-        // i.e. the tiles don't cover the whole window,
-        // They will be spawned accordingly.
-        let mut tile_corners =[
-            camera_tl.truncate(), // Top-Right
-            camera_tl.truncate(), // Bottom-Left
-        ];
         for (tile_entity, tile_tf) in tiles_query.iter() {
             let tile_tl = tile_tf.translation;
 
             let is_not_viewable =
-            tile_tl.x >= camera_corners[0].x   || // Right
-            tile_tl.x <= camera_corners[1].x   || // Left
-            tile_tl.y >= camera_corners[0].y  || // Up
-            tile_tl.y <= camera_corners[1].y ; // Down
+            tile_tl.x >= camera_corners[0].x   + OUT_OF_BORDERS_TILE_TOLERANCE|| // Right
+            tile_tl.x <= camera_corners[1].x   - OUT_OF_BORDERS_TILE_TOLERANCE|| // Left
+            tile_tl.y >= camera_corners[0].y   + OUT_OF_BORDERS_TILE_TOLERANCE|| // Up
+            tile_tl.y <= camera_corners[1].y   - OUT_OF_BORDERS_TILE_TOLERANCE; // Down
 
             if is_not_viewable {
                 commands.entity(tile_entity).despawn();
                 continue;
             }
-
-            if tile_tl.x > tile_corners[0].x && tile_tl.y > tile_corners[0].y {
-                tile_corners[0] = tile_tl.truncate();
-            }
-            if tile_tl.x < tile_corners[1].x && tile_tl.y < tile_corners[1].y {
-                tile_corners[1] = tile_tl.truncate();
             }
         }
 
+    
+}
 
 
-        // If the player hasn't moved
-        if camera_corners[0].x <= tile_corners[0].x && camera_corners[0].y <= tile_corners[0].y && 
-        camera_corners[1].x <= tile_corners[1].x && camera_corners[1].y <= tile_corners[1].y{
-            continue; // Since there is only one camera, this is equal to return;
-            // I use continue because I can, not because I need to.
-            //...
-            // HMMMMMM I'mma "𝘤𝘰𝘯𝘵𝘪𝘯𝘶𝘦;" my e̶x̶t̶r̶e̶m̶e̶l̶y̶ d̶e̶t̶r̶i̶m̶e̶n̶t̶a̶l̶ a̶n̶d̶ u̶n̶d̶e̶n̶i̶a̶b̶l̶y̶ t̶e̶r̶r̶i̶b̶l̶e̶  𝓽𝓮𝓻𝓻𝓲𝓯𝓲𝓬 𝔀𝓸𝓻𝓴
+fn spawn_tiles_inside_view(
+    camera_query: Query<&Transform, With<MainCamera>>,
+    tiles_query: Query<(Entity, &Transform), (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
+    window: Res<Windows>,
+    mut commands: Commands,
+    tile_textures: Res<FruitTilesTextures>,
+
+    // This is used to store the camera's position when tiles were last spawned in each direction
+    // (It is an array because I wasn't able to get an hashmap working ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓)
+    // http://static1.squarespace.com/static/54ad91eae4b04d2abc8d6247/t/568b4fe4c21b86066ae97093/1451970532940/?format=1500w
+    mut last_spawned: Local<[f32; 2]>, // This is the order: [Vertical, Horizontal]
+) {
+    
+    if last_spawned.is_empty() {
+        for index in 0..2 {
+            last_spawned[index] = 0.;
         }
+    }
 
-        // If the player has moved in the top/right direction
-        if camera_corners[0].x > tile_corners[0].x || camera_corners[0].y > tile_corners[0].y {
 
-            dbg!(camera_corners, tile_corners);
+    // Window boilerplate 
+    let window = window.get_primary().unwrap();
+    let window_w = window.width();
+    let window_h = window.height();
 
-            let number_of_tiles_to_spawn = ((camera_corners[0] - tile_corners[0]) / TILE_SIZE).ceil() + TILE_SIZE;
+    for camera_tf in camera_query.iter() {
+        let camera_tl = camera_tf.translation;
+
+        // You can change this to 0 and see what happens when you walk diagonally
+        // It's defined here so it can be used in all the following if blocks
+        let extra_tiles = 6; // 6 to be safe
+
+        if camera_tl.y >= last_spawned[0] + TILE_SIZE.y { // Up
 
             // Fill the whole vertical part
             //
@@ -206,27 +214,138 @@ fn move_tiles_outside_view(
             // --------------        |
             //    TILES     |        |
             //              |        |
-            let number_of_horizontal_tiles = (window.width() / TILE_SIZE.x).ceil() as i32;
-            // The vertical loop
-            // println!("{}, {}", number_of_tiles_to_spawn.y, number_of_horizontal_tiles);
-            for vertical_tile_index in 0..=(number_of_tiles_to_spawn.y as i32) {
-                // The horizontal loop
-                for horizontal_tile_index in 0..=number_of_horizontal_tiles {
-                    spawn_tile(&mut commands, &tile_textures, Vec3 { 
-                        // Start point       +           index * size
-                        x: tile_corners[1].x + horizontal_tile_index as f32 * TILE_SIZE.x , 
-                        y: tile_corners[0].y + vertical_tile_index as f32 * TILE_SIZE.y, 
-                        z: 0. 
-                    });
-                    //println!("Spawn: {}, {}", horizontal_spawn, vertical_spawn);
-                }
+            let number_of_horizontal_tiles = (window.width() / TILE_SIZE.x).ceil() as i32 + extra_tiles * 2;
+                
+            // The horizontal loop
+            for horizontal_tile_index in 0..=number_of_horizontal_tiles {
+                
+                let mut x = camera_tl.x - window_w / 2. + horizontal_tile_index as f32 * TILE_SIZE.x -
+                                extra_tiles as f32 * TILE_SIZE.y / 2.;
+                let mut y = camera_tl.y + window_h / 2. + OUT_OF_BORDERS_TILE_TOLERANCE;
+
+                // Snap to grid
+                y -= y % TILE_SIZE.y;
+                x -= x % TILE_SIZE.x;
+
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x,
+                    y, 
+                    z: 0. 
+                });
+
+                // Spawn another one below for safety
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x,
+                    y: y - TILE_SIZE.y, 
+                    z: 0. 
+                });
+
+
+
             }
 
-
-
+            
+            last_spawned[0] = camera_tl.y;
         }
+        if camera_tl.y <= last_spawned[0] - TILE_SIZE.y { // Down
 
+            let number_of_horizontal_tiles = (window.width() / TILE_SIZE.x).ceil() as i32 + extra_tiles * 2;
+                
+            // The horizontal loop
+            for horizontal_tile_index in 0..=number_of_horizontal_tiles {
+                
+                let mut x = camera_tl.x - window_w / 2. + horizontal_tile_index as f32 * TILE_SIZE.x -
+                                extra_tiles as f32 * TILE_SIZE.y / 2.;
+                let mut y = camera_tl.y - window_h / 2. - OUT_OF_BORDERS_TILE_TOLERANCE;
+
+                // Snap to grid
+                y -= y % TILE_SIZE.y;
+                x -= x % TILE_SIZE.x;
+
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x,
+                    y, 
+                    z: 0. 
+                });
+
+                // Spawn another one below for safety
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x,
+                    y: y + TILE_SIZE.y, 
+                    z: 0. 
+                });
+
+            }
+
+            
+
+            last_spawned[0] = camera_tl.y;
+        }
+        if camera_tl.x >= last_spawned[1] + TILE_SIZE.x { // Right
+                
+            let number_of_vertical_tiles = (window.height() / TILE_SIZE.x).ceil() as i32 + extra_tiles * 2;
+            
+            // The vertical loop
+            for vertical_tile_index in 0..=number_of_vertical_tiles {
+
+                let mut x = camera_tl.x + window_w / 2. + OUT_OF_BORDERS_TILE_TOLERANCE;
+                let mut y = camera_tl.y - window_h / 2. + vertical_tile_index as f32 * TILE_SIZE.y -
+                                extra_tiles as f32 * TILE_SIZE.y / 2.;
+
+                // Snap to grid
+                y -= y % TILE_SIZE.y;
+                x -= x % TILE_SIZE.x;
+
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x,
+                    y, 
+                    z: 0. 
+                });
+
+                // Spawn another one below for safety
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x: x - TILE_SIZE.x,
+                    y, 
+                    z: 0. 
+                });
+
+            }
+
+            
+
+            last_spawned[1] = camera_tl.x;
+        }
+        if camera_tl.x <= last_spawned[1] - TILE_SIZE.x { // Left
+
+            let number_of_vertical_tiles = (window.height() / TILE_SIZE.x).ceil() as i32 + extra_tiles * 2;
+            
+            // The vertical loop
+            for vertical_tile_index in 0..=number_of_vertical_tiles {
+
+                let mut x = camera_tl.x - window_w / 2. - OUT_OF_BORDERS_TILE_TOLERANCE;
+                let mut y = camera_tl.y - window_h / 2. + vertical_tile_index as f32 * TILE_SIZE.y -
+                                extra_tiles as f32 * TILE_SIZE.y / 2.;
+
+                // Snap to grid
+                y -= y % TILE_SIZE.y;
+                x -= x % TILE_SIZE.x;
+
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x,
+                    y, 
+                    z: 0. 
+                });
+
+                // Spawn another one below for safety
+                spawn_tile(&mut commands, &tile_textures, Vec3 { 
+                    x: x + TILE_SIZE.x,
+                    y, 
+                    z: 0. 
+                });
+
+            }
+
+            last_spawned[1] = camera_tl.x;
+        }
     }
-
-    
 }
