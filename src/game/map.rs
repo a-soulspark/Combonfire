@@ -1,7 +1,5 @@
-use std::ops::Add;
-
 use crate::game::{FruitTilesTextures, GameStates};
-use bevy::{prelude::*, utils::HashMap};
+use bevy::prelude::*;
 use bevy_inspector_egui::{Inspectable, RegisterInspectable};
 use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 use rand::Rng;
@@ -174,7 +172,6 @@ fn remove_tiles_outside_view(
 
 fn spawn_tiles_inside_view(
     camera_query: Query<&Transform, With<MainCamera>>,
-    tiles_query: Query<(Entity, &Transform), (Or<(With<TileCover>, With<Tile>)>, Without<MainCamera>)>,
     window: Res<Windows>,
     mut commands: Commands,
     tile_textures: Res<FruitTilesTextures>,
